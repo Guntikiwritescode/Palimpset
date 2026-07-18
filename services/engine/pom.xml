@@ -141,4 +141,31 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <!--
+      Deliberately EXCLUDE the Testcontainers integration tests (JUnit tag "it").
+      Use ONLY when neither a Docker daemon nor PALIMPSEST_TEST_JDBC_URL is available
+      and you accept running without integration coverage. Naming the reason here is
+      the whole point (finding F5): skipping the integration tests must be an
+      explicit, visible choice — `mvn -P no-it` — never a silent default. Without
+      this profile the integration tests run and FAIL LOUDLY if no database is
+      reachable (see IntegrationTestBase), and CI asserts they actually executed
+      (scripts/check_engine_tests.sh).
+    -->
+    <profile>
+      <id>no-it</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <excludedGroups>it</excludedGroups>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
