@@ -63,9 +63,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: "21", cache: maven }
-      - name: build + test
+      - name: build + test (Testcontainers)
         working-directory: services/engine
         run: mvn -B verify
+      - name: assert integration tests executed — no silent skip; floor (F5)
+        run: bash scripts/check_engine_tests.sh
 
   pipeline:
     name: pipeline (pytest fast suite + adapter rules)
@@ -136,6 +138,34 @@ jobs:
           if grep -Eq '^[[:space:]]*type:[[:space:]]*LoadBalancer\b' /tmp/rendered.yaml; then
             echo "FAIL: a LoadBalancer Service is present in the rendered manifests"; exit 1; fi
           echo "OK: license gate holds in the rendered manifests (port-forward only)"
-      # The full kind end-to-end smoke (deploy → import 1k fixture → signature query,
-      # scripts/kind_smoke.sh) is enabled once the engine/explorer Dockerfiles + image
-      # builds land — a WP5 follow-up. It needs images CI does not yet build.
+
+  # The full §8 system smoke (deploy → import 1k synthetic fixture → signature
+  # query → p95 measured → zero outbox lag). Gated to `main`: it is heavy (a kind
+  # cluster running Postgres + engine + explorer + the observability stack) and is
+  # the WP5 portfolio-viable evidence, not a per-branch gate. It FAILS LOUDLY —
+  # scripts/kind_smoke.sh runs under `set -euo pipefail` and `die`s on any failed
+  # assertion; there is no soft-skip. The image build (Step 3 / `make images`)
+  # precedes it. (Restored in WP-R1; the Dockerfiles it needs now exist.)
+  smoke:
+    name: kind smoke (deploy · import 1k · signature · p95 · zero-lag)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21", cache: maven }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: install kind + kubectl (pinned)
+        run: |
+          curl -sSfLo ./kind https://kind.sigs.k8s.io/dl/v0.24.0/kind-linux-amd64
+          curl -sSfLo ./kubectl https://dl.k8s.io/release/v1.31.0/bin/linux/amd64/kubectl
+          chmod +x ./kind ./kubectl
+          sudo mv ./kind ./kubectl /usr/local/bin/
+          kind version && kubectl version --client
+      - name: build images (engine + explorer) — Step 3
+        run: |
+          corepack enable
+          make images
+      - name: run the §8 kind smoke (must execute all 8 steps; no skip)
+        run: bash scripts/kind_smoke.sh
