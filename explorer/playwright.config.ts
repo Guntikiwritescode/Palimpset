@@ -23,10 +23,16 @@ export default defineConfig({
     },
   ],
   webServer: {
-    // Build then preview the static app; the mock worker is bundled from public/.
+    // Preview the static app; the mock worker is bundled from public/. CI builds
+    // the app in a prior step, so preview is enough — but build here too so the
+    // suite is runnable standalone. Bind 127.0.0.1 (matching baseURL) so the
+    // runner's localhost→::1 (IPv6) resolution can't strand the poller (the CI
+    // failure this replaces).
     command: "pnpm run build && pnpm run preview",
     url: "http://127.0.0.1:4173",
     reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
+    timeout: 240_000,
+    stdout: "pipe",
+    stderr: "pipe",
   },
 });
