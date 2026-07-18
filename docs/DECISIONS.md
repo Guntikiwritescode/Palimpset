@@ -120,6 +120,91 @@ recompute operator, calibration runs, Monte Carlo, WHG/ITRDB layers (WP9) are un
 engine, store, and contracts did not change to accommodate any of it (the design
 held), which is the signal §12/§20 asks us to preserve.
 
+## DEV-005 — Governance correction: WP2 & WP5 sign-offs ratified without evidence; WP-R1 restored it
+
+**Context.** An external review compared the repository against ARCHITECTURE §8 and
+the WP acceptance criteria. The build is real and substantial, but several things
+signed off as done had acceptance criteria that **could not be demonstrated** — the
+evidence did not exist. Two of the affected checkpoints (WP2 the import path, WP5
+the portfolio-viable Phase-1 exit) are **mandatory architect sign-offs** per
+HANDOFF §3. Ratifying them without their evidence is the defect this record names.
+Session WP-R1 closes the gap; this entry is the register the correction lives in
+(ARCHITECTURE §15 — "we signed off without evidence, we found it, here is the fix").
+
+**Which criteria were signed off without evidence, and what was missing.** Six
+findings, each independently reproduced at the start of WP-R1 (Step 0):
+
+| # | Signed-off claim | What was actually missing |
+|---|---|---|
+| F1 | WP5 dashboards / WP2 import observability work | The engine registered **no custom meters**. `palimpsest_import_claims_total`, `palimpsest_outbox_pending_rows` (and 5 sibling series) were queried by the Grafana dashboards and `kind_smoke.sh` but **never emitted**. |
+| F2 | WP5 "the stack deploys" | **Zero Dockerfiles.** The manifests reference `palimpsest/engine:local` / `palimpsest/explorer:local` — images nothing built. |
+| F3 | WP5 kind smoke | The §8 system smoke **never ran in CI**. The `manifests` job renders kustomize only; the smoke was commented-out pending Dockerfiles. |
+| F4 | §8 "import → read → action" | Engine integration coverage was **one test** (import→read); the **action path had zero integration coverage**. |
+| F5 | Engine test suite | The only integration test carried `@Testcontainers(disabledWithoutDocker = true)` — a **silent skip** without Docker; nothing asserted it ran. |
+| F6 | `LIMITATIONS.md` "as carefully written as ARCHITECTURE.md" | The reader-facing honesty doc **never said the corpus is synthetic**; the WP5 restore drill had **no evidence of ever being run**. |
+
+(The review's supporting detail was imprecise in two places, corrected in Step 0:
+the engine main tree is **3,450** lines not 4,193; DomainTest names **I3/I5/I7**,
+not I1. Neither changes the finding.)
+
+**What WP-R1 restored (all evidence executed against a real PostgreSQL 16; see the
+WP-R1 checkpoint):**
+- **F1** — registered the meter family in `metrics/EngineMetrics`
+  (`palimpsest_import_claims_total` = claims *inserted*, plus `_duplicates_/_superseded_/_rejected_total`
+  and the outbox gauges `palimpsest_outbox_pending_rows` / `_oldest_age_seconds`).
+  Verified live at `/actuator/prometheus`: counter 0→49 on import, gauge 0 at rest.
+- **F2** — multi-stage engine (JDK→JRE, non-root, actuator healthcheck) and explorer
+  (Vite→nginx) Dockerfiles, pinned base images, `make images` + `kind-load`. Build
+  stages validated (`mvn package`, `pnpm build`); image assembly deferred (no Docker
+  daemon here — DEV-002).
+- **F3** — `kind_smoke.sh` restored as a `main`-gated CI job with the image build
+  preceding it, failing loudly (unchanged script).
+- **F4/F5** — engine tests **8 → 23**, all executed, **0 skipped**: claim lifecycle
+  (assert→dispute→supersede, folds read from the projection), ER merge (PP3 — no
+  silent merge), identity-dispute→ER queue, the licence gate 403, I6 dangling-ref
+  (entity count identical), fuzzy-time predicates, and property tests
+  (effective-confidence determinism/order-independence; slider monotonicity).
+  `disabledWithoutDocker` removed; tests now run against Testcontainers **or**
+  `PALIMPSEST_TEST_JDBC_URL`, fail loudly if neither, with a named `-P no-it`
+  opt-out and a CI floor/no-skip assertion (`scripts/check_engine_tests.sh`).
+- **F6** — `LIMITATIONS.md` leads with the synthetic-corpus disclosure (8 entities /
+  49 claims / 3 sources); the restore drill is now **exercised** with measured
+  timings recorded in `OPERATIONS.md`.
+
+**Incidental defects WP-R1 surfaced and fixed (flagged for ratification — each
+easiest-to-reverse; the WP5 smoke could never have passed with them present):**
+- **Probe path mismatch.** The engine answered probes only under `/api/v1/` while
+  the k8s deployment and `kind_smoke.sh` hit `/healthz` / `/readyz` at the **root**
+  → pods would never become Ready. Fixed additively: `ProbeController` now answers
+  at **both** root and `/api/v1` (rebuild endpoint kept at `/api/v1`); `Filters`
+  exempts both; SDK regenerated (drift gate green). *Interface addition (HANDOFF
+  §7.2) — flagged.*
+- **p95 histogram.** `http_server_requests_seconds` published only a summary (no
+  `_bucket`), so the smoke's `histogram_quantile(...)` (step 7) would return no data.
+  Enabled percentile histograms in `application.yaml`; buckets now present (local p95
+  ≈ 14 ms).
+- **Meter scope.** Step 2 named two meters; the same dashboard queried seven. WP-R1
+  registered the whole import/outbox family so every engine-emitted panel is live,
+  not just the two the smoke asserts. The anomaly counter (dashboard panel 31)
+  remains **unwired** — its taxonomy is adapter-domain; wiring it engine-side would
+  risk a fabricated classification, so it is deferred, not invented.
+
+**What remains UNPROVABLE until the SDFB dump is supplied** (carried, not closed):
+- **FIX-CORPUS** (15,882 / 261,177 / 187,482), **FIX-ANOMALY** (365 / 14 / 1,575 / 1
+  / 6), **FIX-BACON** (29→13; 2 certainly-active) — measured in a prior Phase-0
+  session, cited in ARCHITECTURE §1, asserted only by the slow suite against a
+  locally-supplied dump; **no build or CI in this repo reproduces them**.
+- The **§5.1 p95 SLO (< 300 ms) at real corpus scale** — the histogram is now
+  measured, but only over the 391-row synthetic fixture; the SLO at 261k-claim scale
+  is unmeasured.
+- The **kind smoke green on `main`** — wired, but its execution needs a Docker-capable
+  runner with kind capacity (see Q-12). "Passed on the branch" would not be evidence
+  for `main` regardless (HANDOFF §3).
+
+**Status:** proposed — awaiting owner ratification at the WP-R1 checkpoint. The
+engine, store, and frozen contracts did **not** change to close any of this (the
+design held; §12/§20 signal preserved).
+
 ## Build notes — implementer judgment calls (flagged, easiest-to-reverse)
 - **Explorer unscored-toggle default ON.** Every attribute claim in this corpus is
   unscored; defaulting OFF would empty the primary claims list and hide the messy

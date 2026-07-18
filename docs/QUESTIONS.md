@@ -73,3 +73,19 @@ Defect log, not redesign. Nothing here reopens a §5 ruling.
 - **Q:** SDFB gives life *years* with no place; is `born` object a literal year or an entity (place)?
 - **Blocks:** WP2 adapter. **Adopted:** `born`/`died` are attribute claims with `object.literal {kind:"year"}` and the year carried in `valid_time` (start/end bounds per the four-date model); no place entity is fabricated (I6). Revisited if the Folger tables add places.
 - **Status:** RATIFIED (owner 2026-07-18) — accepted, non-blocking.
+
+---
+
+## WP-R1 findings (evidence remediation session)
+
+### Q-11 · 2026-07-18 · WP-R1/WP4 · §7.4 vs reality — `/about` does not render `LIMITATIONS.md`
+- **Q:** HANDOFF §7.4 (and `LIMITATIONS.md`'s own header) claim the file is "authored once and rendered live as `/about` — the same content, not written twice." It is not: `/about` (`explorer/src/routes/About.tsx`) derives its *figures* live but its *prose* is hand-authored JSX, independent of the markdown. The two are maintained separately, and until WP-R1 **neither** stated in words that the loaded corpus is synthetic.
+- **Blocks:** nothing (non-blocking; the figures are live and correct). **Options:** (a) render `LIMITATIONS.md` into `/about` (one source); (b) generate the markdown from the JSX; (c) accept two surfaces, keep in sync by review.
+- **WP-R1 action:** the synthetic-data disclosure was added to `LIMITATIONS.md` (F6) and the false "authored once" claim there corrected to describe reality. Unifying the surfaces is product work, out of WP-R1 scope.
+- **Recommendation:** (a). **Status:** OPEN — carried to the WP-R1 checkpoint.
+
+### Q-12 · 2026-07-18 · WP-R1/WP5 · §8 — can a GitHub-hosted runner host the full kind smoke?
+- **Q:** The kind smoke is wired as a `main`-gated CI job, but a standard `ubuntu-latest` runner (2 vCPU / 7 GB) must host a kind cluster running Postgres + engine + explorer + otel-collector + prometheus + grafana + postgres-exporter, build two images, deploy, import 1k claims, and query Prometheus within job limits. Whether that fits is unverified (this environment has no Docker/kind — DEV-002 — so it could not be exercised; and a branch pass is not evidence for `main`).
+- **Blocks:** the WP5 "kind smoke green on `main`" acceptance only. **Options:** (a) run as-is on `ubuntu-latest`; (b) a larger runner; (c) a CI-only overlay trimming Grafana (keeping Prometheus, which steps 7–8 require) to fit memory.
+- **Smallest honest alternative if it OOMs:** (c) — trim Grafana only; do **not** weaken the assertions (p95 measured, outbox lag 0). A smoke that passes by not testing is worse than none (the F5 pattern).
+- **Recommendation:** (a) first, fall back to (c). **Status:** OPEN — carried to the WP-R1 checkpoint.
