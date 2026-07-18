@@ -37,8 +37,8 @@ configMapGenerator:
         app.kubernetes.io/part-of: palimpsest
         app.kubernetes.io/component: grafana
     files:
-      - dashboards/palimpsest-api.json
-      - dashboards/palimpsest-ingest.json
+      - observability/dashboards/palimpsest-api.json
+      - observability/dashboards/palimpsest-ingest.json
 
 generatorOptions:
   # Stable ConfigMap name so the Grafana volume reference resolves predictably.
