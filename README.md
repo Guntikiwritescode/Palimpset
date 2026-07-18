@@ -17,7 +17,13 @@ confidence slider and watch weakly-attested relationships fall away** → click 
 edge and land on the verbatim source record two clicks later → finish on a page
 where the system states its own limits in live numbers.
 
-*(Screenshot of the slider beat: `docs/img/slider-beat.png` — added at WP4.)*
+![The confidence slider on Francis Bacon's ego network, windowed to 1600. The
+result line states all three counts at once: ties not ruled out, ties required by
+the evidence, and ties with no dates.](docs/img/slider-0.6.png)
+
+*Above: the entity view at confidence ≥ 0.60. The honesty page (`docs/img/honesty-page.png`)
+derives every figure live from the corpus. Screenshots are of the **synthetic**
+fixture — the license gate forbids showing the real dump.*
 
 ## ⚠ License gate — read this first
 

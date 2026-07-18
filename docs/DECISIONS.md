@@ -94,3 +94,37 @@ easiest-to-reverse). Each is flagged in the relevant PR and carried to the
 checkpoint for ratification.
 
 **Status:** proposed — awaiting architect ratification of the adopted defaults.
+
+## DEV-004 — WP7 entity resolution: partials in this build
+**Context.** WP7's full scope (gold-set tooling, blocking + Fellegi–Sunter scorer,
+precision/recall on a labelled set, the `/adjudicate` view, `resolution=canonical`
+read-folding) is a portfolio-strong milestone gated on a real second source (WP2b).
+
+**What is built.** The write-side of Flow F: `merge-entities` records the canonical
+mapping in `entity_canonical` with the non-overlapping-lifespan warning (W5), and an
+`identity`-ground dispute routes to the `er_candidate` queue (W1). `GET /er/queue`
+and the analytics ER pipeline (blocking → Fellegi–Sunter → gold set) are **not built**
+in this session.
+
+**What is partial.** `resolution=canonical` is accepted on `/entities/{id}` but reads
+do not yet fold same-as components on the canvas (raw resolution only). The Go
+recompute operator, calibration runs, Monte Carlo, WHG/ITRDB layers (WP9) are unbuilt.
+
+**Status:** informational — scoped honestly; carried to the WP7 checkpoint. The
+engine, store, and contracts did not change to accommodate any of it (the design
+held), which is the signal §12/§20 asks us to preserve.
+
+## Build notes — implementer judgment calls (flagged, easiest-to-reverse)
+- **Explorer unscored-toggle default ON.** Every attribute claim in this corpus is
+  unscored; defaulting OFF would empty the primary claims list and hide the messy
+  record the product exists to show (F2). ON renders their absence *with the reason*
+  (PP4). Within D4's latitude; owner may flip.
+- **Explorer possibly/certainly is a pure client-side highlight** (no re-query), so
+  the canvas never empties (D2/A2); only window changes re-query the server.
+- **Playwright pinned to 1.56.0** to match the preinstalled Chromium revision (1194).
+- **Manual `scholar-note` source defaults to license_confirmed=false**, so the export
+  gate errs closed on hand-asserted claims until the owner confirms that source. Safe
+  by default; the owner confirms trusted sources via `source.license_confirmed`.
+- **Bitemporal `asOfSystem` reads** (Flow E) are specified and the write-side guard
+  (W8, 409) is enforced, but as-of *read* replay across all endpoints is not wired in
+  this session — carried to the WP6 checkpoint.
