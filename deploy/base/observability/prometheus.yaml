@@ -1,0 +1,154 @@
+# Prometheus (ARCHITECTURE §3.8, §5.6). Scrapes: the otel-collector's prometheus
+# exporter (engine OTLP metrics), the engine's Micrometer /actuator/prometheus
+# endpoint directly (for the http_server_requests histogram used by the API
+# latency SLO panels), and postgres_exporter (DB size + rowcounts).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: observability
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    app.kubernetes.io/component: prometheus
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: palimpsest-local
+
+    scrape_configs:
+      # Engine metrics re-exposed by the collector (OTLP -> prometheus).
+      - job_name: otel-collector
+        static_configs:
+          - targets: ["otel-collector.observability.svc.cluster.local:8889"]
+            labels:
+              service: palimpsest-engine
+      # Collector's own health/telemetry.
+      - job_name: otel-collector-self
+        static_configs:
+          - targets: ["otel-collector.observability.svc.cluster.local:8888"]
+
+      # Direct engine scrape for the Micrometer HTTP-server histogram
+      # (http_server_requests_seconds) that powers the p50/p95-by-route panels.
+      - job_name: palimpsest-engine
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: ["palimpsest-engine.palimpsest.svc.cluster.local:8080"]
+            labels:
+              service: palimpsest-engine
+
+      # DB size + table rowcounts.
+      - job_name: postgres
+        static_configs:
+          - targets: ["postgres-exporter.observability.svc.cluster.local:9187"]
+
+      # Prometheus self-monitoring.
+      - job_name: prometheus
+        static_configs:
+          - targets: ["localhost:9090"]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data
+  namespace: observability
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    app.kubernetes.io/component: prometheus
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: observability
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    app.kubernetes.io/component: prometheus
+    app.kubernetes.io/name: prometheus
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: palimpsest
+        app.kubernetes.io/component: prometheus
+        app.kubernetes.io/name: prometheus
+    spec:
+      securityContext:
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+      containers:
+        - name: prometheus
+          # Pinned: Prometheus LTS-line release.
+          image: prom/prometheus:v2.53.1
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=15d
+            - --web.enable-lifecycle
+          ports:
+            - name: http
+              containerPort: 9090
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: prometheus-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: observability
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    app.kubernetes.io/component: prometheus
+    app.kubernetes.io/name: prometheus
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http

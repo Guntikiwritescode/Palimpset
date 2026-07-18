@@ -1,0 +1,60 @@
+# Explorer (ARCHITECTURE §3.7) — the static React/TS build served by nginx.
+# Stateless; no API proxying (see the nginx ConfigMap).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: palimpsest-explorer
+  namespace: palimpsest
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    app.kubernetes.io/component: explorer
+    app.kubernetes.io/name: explorer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: explorer
+      app.kubernetes.io/component: explorer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: palimpsest
+        app.kubernetes.io/component: explorer
+        app.kubernetes.io/name: explorer
+    spec:
+      containers:
+        - name: explorer
+          # Placeholder image: the Vite build copied onto nginx. Built locally
+          # and loaded into kind. If you only want the shell for a smoke run,
+          # the plain nginx base still serves /healthz.
+          image: palimpsest/explorer:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d
+      volumes:
+        - name: nginx-conf
+          configMap:
+            name: explorer-nginx

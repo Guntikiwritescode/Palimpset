@@ -67,7 +67,10 @@ CREATE TABLE source_record (
     content_hash text        NOT NULL,
     raw          jsonb       NOT NULL,
     retrieved_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (source_id, record_kind, external_id)
+    -- Identity includes content_hash so an unchanged re-harvest is a duplicate
+    -- (same 4-tuple) while a changed upstream record is a NEW version of the same
+    -- (source, kind, external_id) linked by supersedes_record_id (Flow A 6c, V2).
+    UNIQUE (source_id, record_kind, external_id, content_hash)
 );
 COMMENT ON COLUMN source_record.raw IS 'Verbatim upstream payload. Nothing downstream may destroy or hide it (Flow C).';
 

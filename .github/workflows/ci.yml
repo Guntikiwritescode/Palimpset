@@ -101,11 +101,18 @@ jobs:
         with: { node-version: "22" }
       - name: install + build + test
         working-directory: explorer
+        env:
+          # CI has no pre-provisioned browser dir; let Playwright use its default
+          # cache (~/.cache/ms-playwright) that the install step below populates.
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"
         run: |
           corepack enable
           pnpm install --frozen-lockfile
           pnpm typecheck
           pnpm build
+          # The dev container ships Chromium at /opt/pw-browsers; CI runners do not,
+          # so install the matching browser (+OS deps) before the E2E.
+          pnpm exec playwright install --with-deps chromium
           pnpm test
       - name: no hard-coded honesty-page statistics (§16)
         run: bash scripts/check_no_hardcoded_stats.sh

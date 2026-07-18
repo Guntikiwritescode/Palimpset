@@ -1,0 +1,37 @@
+# nginx config for the explorer (ARCHITECTURE §3.7, §5.6). Serves the static
+# React/Vite build and does SPA-style fallback to index.html. It does NOT proxy
+# the API: the browser talks to the engine directly at the port-forwarded
+# origin, and CORS is pinned engine-side (§7) — keeping the two planes explicit.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: explorer-nginx
+  namespace: palimpsest
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    app.kubernetes.io/component: explorer
+data:
+  default.conf: |
+    server {
+      listen       80;
+      server_name  _;
+      root   /usr/share/nginx/html;
+      index  index.html;
+
+      # Lightweight liveness/readiness target for the probes.
+      location = /healthz {
+        add_header Content-Type text/plain;
+        return 200 'ok';
+      }
+
+      # SPA routing: unknown paths resolve to the app shell (URL-as-state, §3.7).
+      location / {
+        try_files $uri $uri/ /index.html;
+      }
+
+      # Static assets: long cache; index.html stays revalidated.
+      location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+      }
+    }

@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: palimpsest-cloud-stub
+
+# =============================================================================
+# STUB — DEFERRED TO THE ADR-003 CHECKPOINT. NOT A DEPLOYABLE CLOUD OVERLAY.
+# =============================================================================
+# ADR-003 keeps the standing cloud cluster deferred; this directory exists only
+# so the seam is visible, not so it can be applied. See README.md here for what
+# a real cloud overlay must decide before it is built.
+#
+# HARD CONSTRAINT that survives into cloud: still NO Ingress / Gateway /
+# HTTPRoute / LoadBalancer while the SDFB license is unconfirmed (§3.8, §11).
+# A cloud overlay does not get to relax the no-Ingress gate — access stays
+# port-forward (or an authenticated bastion) until license_confirmed=true.
+resources:
+  - ../../base
+
+commonAnnotations:
+  palimpsest.dev/overlay: cloud-stub
+  palimpsest.dev/status: deferred-until-adr-003-checkpoint

@@ -1,0 +1,83 @@
+# Scheduled backups (ARCHITECTURE §5.6, §18 "disk exhaustion" / "backup restore
+# needed"). A CronJob runs pg_dump -Fc into a dedicated backup PVC. The exercised
+# restore path is scripts/restore_drill.sh, documented in deploy/README.md.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: palimpsest-backup
+  namespace: palimpsest
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    app.kubernetes.io/component: backup
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: palimpsest-pg-backup
+  namespace: palimpsest
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    app.kubernetes.io/component: backup
+spec:
+  # 02:00 daily. Custom-format dump so pg_restore can be selective at restore.
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: palimpsest
+            app.kubernetes.io/component: backup
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+            fsGroup: 999
+          containers:
+            - name: pg-dump
+              image: postgres:16.4
+              imagePullPolicy: IfNotPresent
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -euo pipefail
+                  ts="$(date -u +%Y%m%dT%H%M%SZ)"
+                  out="/backup/palimpsest-${ts}.dump"
+                  echo "[backup] pg_dump -> ${out}"
+                  # engine_rw can read every table; -Fc = custom (restorable) format.
+                  pg_dump -Fc -h palimpsest-postgres -U engine_rw -d palimpsest -f "${out}"
+                  echo "[backup] wrote $(du -h "${out}" | cut -f1)"
+                  # Retain the 7 most recent dumps; prune the rest.
+                  ls -1t /backup/palimpsest-*.dump | tail -n +8 | xargs -r rm -f
+                  echo "[backup] retained:"; ls -1t /backup/palimpsest-*.dump
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: palimpsest-secrets
+                      key: engine-db-password
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: palimpsest-backup

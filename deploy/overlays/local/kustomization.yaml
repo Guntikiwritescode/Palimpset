@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: palimpsest-local
+
+# The kind overlay (ADR-003: local kind now, standing cluster deferred).
+# Everything is ClusterIP + port-forward — NO NodePort, NO LoadBalancer, NO
+# Ingress. Access instructions are in deploy/README.md.
+resources:
+  - ../../base
+
+# Local image names. These are built on the host and loaded into the kind node
+# with `kind load docker-image` (see scripts/kind_smoke.sh / scripts/demo.sh);
+# imagePullPolicy: IfNotPresent (set in base) makes kind use the loaded image
+# instead of trying to pull from a registry.
+images:
+  - name: palimpsest/engine
+    newTag: local
+  - name: palimpsest/explorer
+    newTag: local
+
+commonAnnotations:
+  palimpsest.dev/overlay: local

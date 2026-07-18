@@ -32,16 +32,23 @@ for f in "${FILES[@]:-}"; do
   case "$f" in
     docs/*|scripts/check_no_dump.sh|.claude/*|CLAUDE.md|README.md) continue;;
   esac
-  if [[ "$f" =~ \.csv$ ]] && [[ "$f" == fixtures/* ]]; then
+  # Any CSV/TSV under fixtures/ must be explicitly marked synthetic.
+  if [[ "$f" =~ \.(csv|tsv|tab)$ ]] && [[ "$f" == fixtures/* ]]; then
     if ! head -c 4096 "$f" | grep -qi 'SYNTHETIC'; then
-      echo "  ✗ $f — CSV under fixtures/ without a SYNTHETIC marker (possible dump slice)"; fail=1
+      echo "  ✗ $f — tabular file under fixtures/ without a SYNTHETIC marker (possible dump slice)"; fail=1
     fi
   fi
   if [[ "$(basename "$f")" =~ $DUMP_NAME_RE ]]; then
     echo "  ✗ $f — filename resembles an SDFB dump artifact"; fail=1
   fi
-  if head -c 8192 "$f" 2>/dev/null | grep -Eqi "$DUMP_HEADER_RE"; then
-    echo "  ✗ $f — contains SDFB dump header columns"; fail=1
+  # The dump is a CSV/TSV export. Scan ONLY tabular data files for the dump's
+  # header row — never source code or synthetic NDJSON, which legitimately
+  # reference the column NAMES to reproduce the corpus SHAPE (§20 A5). A real
+  # dump header is those columns delimited on one line.
+  if [[ "$f" =~ \.(csv|tsv|tab)$ ]]; then
+    if head -n 5 "$f" 2>/dev/null | grep -Eqi "$DUMP_HEADER_RE"; then
+      echo "  ✗ $f — tabular file with SDFB dump header columns"; fail=1
+    fi
   fi
 done
 
