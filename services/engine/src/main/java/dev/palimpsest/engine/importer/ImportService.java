@@ -31,11 +31,14 @@ public class ImportService {
     private final InterchangeValidator validator;
     private final ImportStore store;
     private final ObjectMapper om;
+    private final dev.palimpsest.engine.metrics.EngineMetrics metrics;
 
-    public ImportService(InterchangeValidator validator, ImportStore store, ObjectMapper om) {
+    public ImportService(InterchangeValidator validator, ImportStore store, ObjectMapper om,
+                         dev.palimpsest.engine.metrics.EngineMetrics metrics) {
         this.validator = validator;
         this.store = store;
         this.om = om;
+        this.metrics = metrics;
     }
 
     @Transactional
@@ -76,6 +79,11 @@ public class ImportService {
         }
 
         store.tallyImportRun(runId, received, inserted, duplicates, superseded, rejects.size());
+        // Emit the Flow-A import-outcome meters (F1). Claims only — the dashboard's
+        // "Import (Flow A)" panels count the claim path, not the entity prerequisite.
+        if (kind == Kind.CLAIMS) {
+            metrics.recordClaimImport(inserted, duplicates, superseded, rejects.size());
+        }
         return new Dtos.ImportReportDto(runId, batchNo, received, inserted, duplicates, superseded, rejects);
     }
 

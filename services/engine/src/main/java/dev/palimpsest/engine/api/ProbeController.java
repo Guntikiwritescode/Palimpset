@@ -7,12 +7,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Probes and the projector maintenance endpoint (rebuild-projections, §6.3). */
 @RestController
-@RequestMapping("/api/v1")
 public class ProbeController {
 
     private final JdbcTemplate jdbc;
@@ -23,12 +21,16 @@ public class ProbeController {
         this.projector = projector;
     }
 
-    @GetMapping("/healthz")
+    // Probes answer at BOTH root (deploy/base/palimpsest/*-deployment.yaml probes and
+    // scripts/kind_smoke.sh curl `${ENGINE}/readyz` at root) and under the /api/v1 base
+    // (BUILD-CONTRACT §4). Before WP-R1 they were only under /api/v1, so the k8s
+    // readiness/liveness probes 500'd and the WP5 smoke could never reach Ready.
+    @GetMapping({"/healthz", "/api/v1/healthz"})
     public Map<String, Object> healthz() {
         return Map.of("status", "ok");
     }
 
-    @GetMapping("/readyz")
+    @GetMapping({"/readyz", "/api/v1/readyz"})
     public ResponseEntity<Map<String, Object>> readyz() {
         try {
             // ready = DB reachable + migrations current (base tables present).
@@ -41,7 +43,7 @@ public class ProbeController {
         return ResponseEntity.ok(Map.of("status", "ready", "outboxLag", projector.outboxLag()));
     }
 
-    @PostMapping("/admin/rebuild-projections")
+    @PostMapping("/api/v1/admin/rebuild-projections")
     public Dtos.Envelope<Map<String, Object>> rebuild(HttpServletRequest req) {
         int n = projector.rebuildAll();
         return Dtos.Envelope.of(Map.of("entitiesRecomputed", n), ApiSupport.meta(req));

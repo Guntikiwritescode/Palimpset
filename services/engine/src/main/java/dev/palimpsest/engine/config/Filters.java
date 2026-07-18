@@ -88,6 +88,7 @@ public final class Filters {
         protected boolean shouldNotFilter(HttpServletRequest req) {
             String p = req.getRequestURI();
             return p.startsWith("/actuator") || p.startsWith("/v3/api-docs") || p.startsWith("/swagger-ui")
+                    || p.equals("/healthz") || p.equals("/readyz")
                     || p.equals("/api/v1/healthz") || p.equals("/api/v1/readyz");
         }
     }

@@ -79,6 +79,19 @@ public class ProjectorService {
         return n == null ? 0 : n;
     }
 
+    /**
+     * Age in seconds of the OLDEST unprocessed outbox row (0 when the outbox is
+     * drained). Backs the {@code palimpsest_outbox_oldest_age_seconds} gauge and
+     * the §3.4 lag SLO ({@literal <} 60s p99). Read on the metrics-scrape thread,
+     * so it must be cheap and never throw.
+     */
+    public double oldestUnprocessedAgeSeconds() {
+        Double s = jdbc.queryForObject(
+                "SELECT COALESCE(EXTRACT(EPOCH FROM (now() - MIN(created_at))), 0) "
+              + "FROM outbox WHERE processed_at IS NULL", Double.class);
+        return s == null ? 0.0 : s;
+    }
+
     /** rebuild-projections: recompute every read model from base tables. */
     @Transactional
     public int rebuildAll() {
