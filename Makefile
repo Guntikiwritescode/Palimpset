@@ -81,6 +81,22 @@ explorer-build: ## Build the explorer
 dev-db: ## Create local roles + palimpsest database
 	bash scripts/dev_db.sh
 
+# ---- images ----------------------------------------------------------------
+CLUSTER_NAME ?= palimpsest-smoke
+
+.PHONY: images
+images: ## Build the engine + explorer container images, tagged :local (needs Docker)
+	# Engine build context is the REPO ROOT (the build copies contracts/ onto the
+	# classpath); explorer builds from explorer/.
+	docker build -f services/engine/Dockerfile -t palimpsest/engine:local .
+	docker build -f explorer/Dockerfile -t palimpsest/explorer:local explorer
+	@docker images --format '{{.Repository}}:{{.Tag}}' | grep -E '^palimpsest/(engine|explorer):local$$'
+
+.PHONY: kind-load
+kind-load: images ## Load the :local images into the kind cluster (needs kind)
+	kind load docker-image palimpsest/engine:local   --name $(CLUSTER_NAME)
+	kind load docker-image palimpsest/explorer:local --name $(CLUSTER_NAME)
+
 # ---- demo ------------------------------------------------------------------
 .PHONY: demo
 demo: ## Bring up the stack and load the synthetic fixture (kind; needs Docker)

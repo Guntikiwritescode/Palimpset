@@ -1,0 +1,11 @@
+# Explorer image build context = explorer/. Keep it lean and reproducible:
+# node_modules is reinstalled from the frozen lockfile inside the build stage;
+# dist/ and test output are rebuilt.
+node_modules
+dist
+.vite
+coverage
+playwright-report
+test-results
+Dockerfile
+.dockerignore

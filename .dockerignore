@@ -1,0 +1,18 @@
+# Repo-root .dockerignore — trims the engine image build context (which is the
+# repo root, because the engine build needs contracts/). The engine Dockerfile
+# only COPYs contracts/ and services/engine/; everything else is noise.
+.git
+**/target
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+explorer
+pipeline
+analytics
+sdk
+tools
+fixtures
+deploy
+docs
+*.log
