@@ -1,0 +1,43 @@
+{
+  "name": "palimpsest-explorer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "PALIMPSEST explorer — uncertainty-aware historical knowledge graph (internal use only; SDFB license unconfirmed).",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "test": "vitest run && playwright test"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-force-graph-2d": "1.27.1",
+    "react-router-dom": "6.28.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.0",
+    "@testing-library/jest-dom": "6.6.3",
+    "@testing-library/react": "16.1.0",
+    "@testing-library/user-event": "14.5.2",
+    "@types/node": "22.10.2",
+    "@types/react": "18.3.18",
+    "@types/react-dom": "18.3.5",
+    "@vitejs/plugin-react": "4.3.4",
+    "jsdom": "25.0.1",
+    "msw": "2.7.0",
+    "typescript": "5.7.2",
+    "vite": "5.4.11",
+    "vitest": "2.1.8"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
+  },
+  "packageManager": "pnpm@10.33.0"
+}
