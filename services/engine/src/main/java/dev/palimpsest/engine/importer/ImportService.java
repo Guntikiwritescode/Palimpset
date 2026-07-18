@@ -154,6 +154,48 @@ public class ImportService {
         return new int[]{1, 0, superseded};
     }
 
+    /**
+     * Create a single claim through the same invariant path as import (assert-claim,
+     * supersede replacement — WP6). Resolves refs (I6), upserts support (I4), writes
+     * claim + support + confidence + assert event + status + outbox (I2/I3).
+     * Throws ApiException on an unresolvable ref or unknown predicate.
+     */
+    @Transactional
+    public long createClaim(ParsedClaim c, long agentId, String runId) {
+        if (!store.relationTypeExists(c.predicate())) {
+            throw dev.palimpsest.engine.api.ApiException.badRequest("unknown predicate '" + c.predicate() + "'");
+        }
+        Long subjectId = store.resolveEntity(c.subject())
+                .orElseThrow(() -> dev.palimpsest.engine.api.ApiException.badRequest(
+                        "unresolvable subject ref " + c.subject().authority() + ":" + c.subject().id()));
+        Long objectEntityId = null;
+        if (c.objectEntity() != null) {
+            objectEntityId = store.resolveEntity(c.objectEntity())
+                    .orElseThrow(() -> dev.palimpsest.engine.api.ApiException.badRequest(
+                            "unresolvable object ref " + c.objectEntity().authority() + ":" + c.objectEntity().id()));
+        }
+        List<Long> recordIds = new ArrayList<>();
+        for (Support sp : c.support()) {
+            long sourceId = store.upsertSource(sp.source());
+            recordIds.add(store.upsertSourceRecord(sourceId, sp).id());
+        }
+        long claimId = store.insertClaim(c, subjectId, objectEntityId, agentId, runId);
+        for (Long rid : recordIds) {
+            store.addSupport(claimId, rid);
+        }
+        store.writeConfidenceCurrent(claimId, c);
+        store.assertClaim(claimId, agentId);
+        return claimId;
+    }
+
+    public ParsedClaim parseClaim(JsonNode node) {
+        InterchangeValidator.Result v = validator.validateClaim(node);
+        if (!v.valid()) {
+            throw dev.palimpsest.engine.api.ApiException.badRequest("schema: " + v.message());
+        }
+        return ParsedClaim.from(node);
+    }
+
     private static final class RejectException extends RuntimeException {
         RejectException(String m) {
             super(m);

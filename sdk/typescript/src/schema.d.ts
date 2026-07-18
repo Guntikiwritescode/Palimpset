@@ -36,6 +36,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/actions/undispute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["undispute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/actions/supersede": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["supersede"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/actions/merge-entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["merge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/actions/dispute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["dispute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/actions/assert-claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["assertClaim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/actions/adjust-confidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["adjust"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stats/summary": {
         parameters: {
             query?: never;
@@ -116,6 +212,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/paths": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["paths"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/meta/sources": {
         parameters: {
             query?: never;
@@ -172,6 +284,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["healthz"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export/claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["exportClaims"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["events"];
         put?: never;
         post?: never;
         delete?: never;
@@ -381,6 +525,33 @@ export interface components {
             };
             meta?: components["schemas"]["Meta"];
         };
+        UndisputeReq: {
+            /** Format: int64 */
+            claimId?: number;
+        };
+        JsonNode: Record<string, never>;
+        SupersedeReq: {
+            /** Format: int64 */
+            claimId?: number;
+            replacement?: components["schemas"]["JsonNode"];
+            reason?: string;
+        };
+        MergeReq: {
+            memberEntityIds?: number[];
+            rationale?: string;
+        };
+        DisputeReq: {
+            /** Format: int64 */
+            claimId?: number;
+            ground?: string;
+            reason?: string;
+        };
+        AdjustReq: {
+            /** Format: int64 */
+            claimId?: number;
+            confidence?: components["schemas"]["JsonNode"];
+            reason?: string;
+        };
         EnvelopeStatsDto: {
             data?: components["schemas"]["StatsDto"];
             meta?: components["schemas"]["Meta"];
@@ -471,6 +642,24 @@ export interface components {
             data?: components["schemas"]["RunDto"];
             meta?: components["schemas"]["Meta"];
         };
+        EnvelopePathResult: {
+            data?: components["schemas"]["PathResult"];
+            meta?: components["schemas"]["Meta"];
+        };
+        PathResult: {
+            paths?: components["schemas"]["PathStep"][][];
+            budgetExceeded?: boolean;
+            truncated?: boolean;
+        };
+        PathStep: {
+            /** Format: int64 */
+            entityId?: number;
+            displayName?: string;
+            /** Format: int64 */
+            claimId?: number;
+            /** Format: double */
+            confidence?: number;
+        };
         EnvelopeListSourceDto: {
             data?: components["schemas"]["SourceDto"][];
             meta?: components["schemas"]["Meta"];
@@ -494,6 +683,20 @@ export interface components {
         EnvelopeListAgentDto: {
             data?: components["schemas"]["AgentDto"][];
             meta?: components["schemas"]["Meta"];
+        };
+        EnvelopeListEventDto: {
+            data?: components["schemas"]["EventDto"][];
+            meta?: components["schemas"]["Meta"];
+        };
+        EventDto: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            claimId?: number;
+            eventType?: string;
+            actor?: components["schemas"]["AgentDto"];
+            occurredAt?: string;
+            payload?: Record<string, never>;
         };
         AttributeGroupDto: {
             predicate?: string;
@@ -614,16 +817,6 @@ export interface components {
             data?: components["schemas"]["HistoryDto"];
             meta?: components["schemas"]["Meta"];
         };
-        EventDto: {
-            /** Format: int64 */
-            id?: number;
-            /** Format: int64 */
-            claimId?: number;
-            eventType?: string;
-            actor?: components["schemas"]["AgentDto"];
-            occurredAt?: string;
-            payload?: Record<string, never>;
-        };
         HistoryDto: {
             events?: components["schemas"]["EventDto"][];
         };
@@ -684,6 +877,150 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EnvelopeMapStringObject"];
+                };
+            };
+        };
+    };
+    undispute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UndisputeReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EnvelopeMapStringObject"];
+                };
+            };
+        };
+    };
+    supersede: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupersedeReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EnvelopeMapStringObject"];
+                };
+            };
+        };
+    };
+    merge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EnvelopeMapStringObject"];
+                };
+            };
+        };
+    };
+    dispute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisputeReq"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EnvelopeMapStringObject"];
+                };
+            };
+        };
+    };
+    assertClaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JsonNode"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EnvelopeMapStringObject"];
+                };
+            };
+        };
+    };
+    adjust: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdjustReq"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -805,6 +1142,35 @@ export interface operations {
             };
         };
     };
+    paths: {
+        parameters: {
+            query: {
+                from: number;
+                to: number;
+                minConfidence?: number;
+                windowStart?: string;
+                windowEnd?: string;
+                temporalMode?: string;
+                maxDepth?: number;
+                maxPaths?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EnvelopePathResult"];
+                };
+            };
+        };
+    };
     sources: {
         parameters: {
             query?: never;
@@ -883,6 +1249,52 @@ export interface operations {
                     "*/*": {
                         [key: string]: Record<string, never>;
                     };
+                };
+            };
+        };
+    };
+    exportClaims: {
+        parameters: {
+            query?: {
+                format?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    events: {
+        parameters: {
+            query?: {
+                since?: string;
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EnvelopeListEventDto"];
                 };
             };
         };
