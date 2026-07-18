@@ -117,17 +117,25 @@ jobs:
       - name: no hard-coded honesty-page statistics (§16)
         run: bash scripts/check_no_hardcoded_stats.sh
 
-  kind-smoke:
-    name: kind smoke (main only)
-    if: github.ref == 'refs/heads/main'
+  manifests:
+    name: manifests render (kustomize · no public exposure)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: helm/kind-action@v1
-      - name: kustomize build validates
+      - name: install kustomize
         run: |
-          curl -sSLo /usr/local/bin/kustomize.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/latest/download/kustomize.tar.gz || true
-          kubectl kustomize deploy/overlays/local > /tmp/rendered.yaml
-          ! grep -Eq '^\s*kind:\s*Ingress' /tmp/rendered.yaml   # gate: no Ingress in rendered output
-      - name: deploy + import 1k synthetic fixture + signature query
-        run: bash scripts/kind_smoke.sh
+          curl -sSfL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.3/kustomize_v5.4.3_linux_amd64.tar.gz | tar -xz
+          sudo install -m 0755 kustomize /usr/local/bin/kustomize
+          kustomize version
+      - name: render the local overlay and assert NO Ingress/Gateway/HTTPRoute/LoadBalancer
+        run: |
+          kustomize build deploy/overlays/local > /tmp/rendered.yaml
+          echo "rendered $(grep -c '^kind:' /tmp/rendered.yaml) objects"
+          if grep -Eq '^[[:space:]]*kind:[[:space:]]*(Ingress|Gateway|HTTPRoute)\b' /tmp/rendered.yaml; then
+            echo "FAIL: a public-exposure kind is present in the rendered manifests"; exit 1; fi
+          if grep -Eq '^[[:space:]]*type:[[:space:]]*LoadBalancer\b' /tmp/rendered.yaml; then
+            echo "FAIL: a LoadBalancer Service is present in the rendered manifests"; exit 1; fi
+          echo "OK: license gate holds in the rendered manifests (port-forward only)"
+      # The full kind end-to-end smoke (deploy → import 1k fixture → signature query,
+      # scripts/kind_smoke.sh) is enabled once the engine/explorer Dockerfiles + image
+      # builds land — a WP5 follow-up. It needs images CI does not yet build.
