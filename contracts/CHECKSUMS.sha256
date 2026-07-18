@@ -1,0 +1,4 @@
+# sha256 checksums of the FROZEN contract files (HANDOFF §4 rule 1).
+# Regenerate only via the §2 change-control process: scripts/freeze_contracts.py
+93f4b67fc435b6f768919c2a8c5eeba2eb2dce90f98505bce54ec29ad193b0e1  contracts/claim.schema.json
+cc135f4612f2ea998bfa9621c2567d657e444033e209ea447a09b1afec05d618  contracts/claim-schema.sql

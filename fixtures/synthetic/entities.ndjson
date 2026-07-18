@@ -1,0 +1,4 @@
+{"schema_version":"0.1.0","ref":{"authority":"synth","id":"S1"},"entity_type":"person","external_ids":[{"authority":"synth","id":"S1"}]}
+{"schema_version":"0.1.0","ref":{"authority":"synth","id":"S2"},"entity_type":"person","external_ids":[{"authority":"synth","id":"S2"}]}
+{"schema_version":"0.1.0","ref":{"authority":"synth","id":"S3"},"entity_type":"person","external_ids":[{"authority":"synth","id":"S3"}]}
+{"schema_version":"0.1.0","ref":{"authority":"synth","id":"S4"},"entity_type":"person","external_ids":[{"authority":"synth","id":"S4"}]}

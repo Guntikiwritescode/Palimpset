@@ -1,0 +1,50 @@
+# The SDFB dump NEVER enters git, whole or in part (HANDOFF §4 rule 5).
+# It lives at a local path outside the working tree, referenced by config.
+data/
+dumps/
+*.dump
+sdfb-*/
+six-degrees-*/
+# any CSV under fixtures/ must be synthetic; raw source CSVs are ignored
+/fixtures/**/*.raw.csv
+
+# Secrets — Kubernetes Secret objects only; never files in git (HANDOFF §4 rule 9).
+.env
+.env.*
+!.env.example
+CLAUDE.local.md
+*.pem
+*.key
+secrets/
+
+# Local database volumes / backups
+pgdata/
+*.sql.gz
+backups/
+
+# Build output
+target/
+build/
+dist/
+out/
+*.class
+node_modules/
+.pnpm-store/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp

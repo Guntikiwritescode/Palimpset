@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://palimpsest.dev/contracts/claim.schema.json",
+  "title": "PALIMPSEST interchange claim",
+  "description": "FROZEN CONTRACT (ARCHITECTURE §2). Version 0.1.0. Governs every claim that crosses a process boundary: adapter → engine import, action requests that create claims, analytics write-back. Adapters pin the version they emit; the engine validates and rejects unknown majors. PROVENANCE: authored fresh per deviation DEV-001 (the Phase-0 artifact was not available); faithful to ARCHITECTURE §2/§5/§13.3, not a byte-identical restoration.",
+  "$comment": "schema_version 0.1.0. The root schema is a claim (so 'claim.schema.json governs every claim' holds literally and the sample-claims fixture validates against the root). The entity-import record is $defs/entityRecord; the engine validates kind=entities lines against it.",
+
+  "type": "object",
+  "unevaluatedProperties": false,
+  "required": ["schema_version", "subject", "predicate", "object", "confidence", "method", "asserted_by", "support"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "subject": { "$ref": "#/$defs/entityRef" },
+    "predicate": { "$ref": "#/$defs/predicateSlug" },
+    "object": { "$ref": "#/$defs/claimObject" },
+    "valid_time": { "$ref": "#/$defs/fuzzyInterval" },
+    "confidence": { "$ref": "#/$defs/confidence" },
+    "method": { "$ref": "#/$defs/method" },
+    "method_detail": {
+      "type": "object",
+      "description": "For method=inferred: algorithm + parameters. For extracted: model + version. Rendered in the evidence panel (W9)."
+    },
+    "asserted_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Agent slug (e.g. 'pipeline', 'scholar', a model slug). The engine resolves it to an agent row and stamps the assert event (ADR-005)."
+    },
+    "support": {
+      "type": "array",
+      "minItems": 1,
+      "description": "≥1 support link (I4). Each carries the verbatim upstream source_record so lineage is complete (Flow C). Records are upserted by (source, record_kind, external_id); an identical content_hash is a duplicate/no-op, a differing one supersedes.",
+      "items": { "$ref": "#/$defs/supportRecord" }
+    }
+  },
+
+  "$defs": {
+    "entityRef": {
+      "type": "object",
+      "description": "Authority-qualified external id. The engine resolves it; an unresolvable ref rejects the containing claim (I6).",
+      "unevaluatedProperties": false,
+      "required": ["authority", "id"],
+      "properties": {
+        "authority": { "type": "string", "minLength": 1, "examples": ["sdfb"] },
+        "id": { "type": "string", "minLength": 1, "examples": ["10000473"] }
+      }
+    },
+
+    "predicateSlug": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "A relation_type slug, e.g. 'associated-with', 'corresponded-with', 'has-name', 'born', 'died', 'has-gender', 'has-description', 'has-external-id'."
+    },
+
+    "claimObject": {
+      "type": "object",
+      "description": "Exactly one of entity | literal (mirrors the store CHECK claim_object_exactly_one).",
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "required": ["entity"],
+          "properties": { "entity": { "$ref": "#/$defs/entityRef" } }
+        },
+        {
+          "required": ["literal"],
+          "properties": { "literal": { "$ref": "#/$defs/literal" } }
+        }
+      ]
+    },
+
+    "literal": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["string", "year", "date", "gender", "external-id"] },
+        "value": { "type": ["string", "number", "boolean"] },
+        "authority": { "type": "string", "description": "For kind=external-id: the naming authority (e.g. 'odnb'). A has-external-id claim, NOT an identity anchor." }
+      }
+    },
+
+    "fuzzyInterval": {
+      "type": "object",
+      "description": "Four-date fuzzy valid-time model (§13.3). Any bound may be null (unknown). The source's native encoding is preserved verbatim under 'original' and is never destroyed. 'approximate' is the circa marker — no invented ±window (§17.2 S3).",
+      "unevaluatedProperties": false,
+      "properties": {
+        "start_earliest": { "$ref": "#/$defs/nullableDate" },
+        "start_latest":   { "$ref": "#/$defs/nullableDate" },
+        "end_earliest":   { "$ref": "#/$defs/nullableDate" },
+        "end_latest":     { "$ref": "#/$defs/nullableDate" },
+        "approximate":    { "type": "boolean", "default": false },
+        "original":       { "description": "Verbatim native encoding, e.g. {\"start\":{\"type_code\":\"AF/IN\",\"year\":\"1561\"}}." }
+      }
+    },
+
+    "nullableDate": {
+      "type": ["string", "null"],
+      "pattern": "^-?\\d{1,6}-\\d{2}-\\d{2}$",
+      "description": "ISO date YYYY-MM-DD (leading '-' permitted for completeness), or null when the bound is unknown."
+    },
+
+    "confidence": {
+      "description": "Source-native scalar in [0,1], OR unscored (absence — no invented number, I5). 'unscored' MUST NOT carry a point.",
+      "oneOf": [
+        {
+          "type": "object",
+          "unevaluatedProperties": false,
+          "required": ["kind", "scale", "raw", "point", "calibrated"],
+          "properties": {
+            "kind": { "const": "source_native_scalar" },
+            "scale": { "type": "string", "examples": ["sdfb_max_certainty_0_100"] },
+            "raw": { "description": "The source's own value verbatim, e.g. 97." },
+            "point": { "type": "number", "minimum": 0, "maximum": 1 },
+            "calibrated": { "const": false, "description": "Import-time confidence is never calibrated; calibration is a Phase-3 run (§6.2)." }
+          }
+        },
+        {
+          "type": "object",
+          "unevaluatedProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": { "const": "unscored" }
+          }
+        }
+      ]
+    },
+
+    "method": {
+      "type": "string",
+      "enum": ["manual", "imported", "extracted", "inferred"],
+      "description": "Provenance method. Import uses 'imported'; ER writes 'inferred'; scholarly writes 'manual'; text extraction 'extracted'."
+    },
+
+    "supportRecord": {
+      "type": "object",
+      "description": "A verbatim source record. The importer upserts source_record by (source, record_kind, external_id) and links it to the claim.",
+      "unevaluatedProperties": false,
+      "required": ["source", "record_kind", "external_id", "content_hash", "raw"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1, "description": "Source slug, e.g. 'sdfb-2017-10-13'." },
+        "record_kind": { "type": "string", "minLength": 1, "examples": ["relationship", "person"] },
+        "external_id": { "type": "string", "minLength": 1 },
+        "content_hash": { "type": "string", "minLength": 1 },
+        "raw": { "description": "Verbatim upstream payload for this record (Flow C)." }
+      }
+    },
+
+    "entityRecord": {
+      "type": "object",
+      "description": "Import kind=entities line. Creates an entity and its identity-bearing 1:1 authority anchors (entity_external_id). Entities are created ONLY here or by explicit action — never as a side effect of a relation (I6). Names, gender, descriptions and many-to-one ids (ODNB) are separate CLAIMS, not fields here.",
+      "unevaluatedProperties": false,
+      "required": ["schema_version", "ref", "entity_type"],
+      "properties": {
+        "schema_version": { "const": "0.1.0" },
+        "ref": { "$ref": "#/$defs/entityRef" },
+        "entity_type": { "type": "string", "examples": ["person", "document"] },
+        "external_ids": {
+          "type": "array",
+          "description": "Identity-bearing 1:1 anchors only. For SDFB, only the 'sdfb' authority.",
+          "items": { "$ref": "#/$defs/entityRef" }
+        }
+      }
+    }
+  }
+}
