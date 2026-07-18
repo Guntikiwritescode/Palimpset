@@ -5,3 +5,4 @@
 {"entity_type":"person","external_ids":[{"authority":"synth","id":"5"}],"ref":{"authority":"synth","id":"5"},"schema_version":"0.1.0"}
 {"entity_type":"person","external_ids":[{"authority":"synth","id":"6"}],"ref":{"authority":"synth","id":"6"},"schema_version":"0.1.0"}
 {"entity_type":"person","external_ids":[{"authority":"synth","id":"7"}],"ref":{"authority":"synth","id":"7"},"schema_version":"0.1.0"}
+{"entity_type":"document","external_ids":[{"authority":"synth","id":"letter-1"}],"ref":{"authority":"synth","id":"letter-1"},"schema_version":"0.1.0"}

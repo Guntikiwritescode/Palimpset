@@ -33,13 +33,31 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..adapters.base import Claim, EntityRecord, to_ndjson_line
+import hashlib
+import json
+
+from ..adapters.base import (
+    Claim,
+    EntityRecord,
+    entity_ref,
+    literal,
+    to_ndjson_line,
+    unscored,
+)
 from ..adapters.sdfb import SDFBAdapter
 from ..quality import AnomalyCounters
 
 SYNTH_AUTHORITY = "synth"
 SYNTH_SOURCE_SLUG = "synth-fixture"
 SYNTH_SCALE_NAME = "synth_0_100"
+
+# WP2b: a second (and a competing-life-date) source that OVERLAP the SDFB-synth
+# people by reusing the same `synth` authority ids, so the overlap is exact and
+# needs no entity resolution — the license-safe way to demonstrate cross-source
+# entities and genuine competing claims (§20 A1) in CI and `make demo`. This
+# stands in for the post-WP7 state (real GND↔sdfb linking is WP7 ER).
+CORRESPSEARCH_SYNTH_SLUG = "correspsearch-synth"
+ALTDATES_SYNTH_SLUG = "folger-synth"  # synthetic stand-in for the Folger alternate-life-dates export (§2.4)
 
 # The threshold ladder the interaction is demonstrated on. The generator
 # guarantees a STRICTLY decreasing edge count across it by seeding one backbone
@@ -200,14 +218,72 @@ def edge_counts_by_threshold(
     return out
 
 
+def _hash(raw: dict[str, Any]) -> str:
+    return hashlib.sha256(json.dumps(raw, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()[:16]
+
+
+def _support(slug: str, kind: str, ext: str, raw: dict[str, Any]) -> list[dict[str, Any]]:
+    return [{"source": slug, "record_kind": kind, "external_id": ext, "content_hash": _hash(raw), "raw": raw}]
+
+
+def _instant(year: int) -> dict[str, Any]:
+    d0, d1 = f"{year}-01-01", f"{year}-12-31"
+    return {"start_earliest": d0, "start_latest": d1, "end_earliest": d0, "end_latest": d1,
+            "approximate": False, "original": {"when": str(year)}}
+
+
+def overlapping_second_sources() -> tuple[list[EntityRecord], list[Claim]]:
+    """Cross-source content that overlaps the SDFB-synth people (WP2b acceptance).
+
+    Produces: a genuine competing claim rendered side by side (PP3), a pair with
+    >1 claim from >1 source, cross-source entities, unscored *relationship* claims
+    (correspSearch letters — D4/Q-2), and a document entity.
+    """
+    ref = lambda i: entity_ref(SYNTH_AUTHORITY, i)  # noqa: E731
+    entities = [EntityRecord(ref("letter-1"), "document", [ref("letter-1")])]
+    claims: list[Claim] = []
+
+    # correspSearch-synth: a letter Bacon(1) → Helen(3), 1605, UNSCORED — overlaps
+    # the SDFB associated-with(1,3), so the pair dossier shows >1 claim from 2 sources.
+    letter_raw = {"key": "letter-1", "sender": "synth:1", "receiver": "synth:3", "when": "1605",
+                  "SYNTHETIC": True}
+    letter_sup = _support(CORRESPSEARCH_SYNTH_SLUG, "letter", "letter-1", letter_raw)
+    claims.append(Claim(subject=ref("1"), predicate="corresponded-with", obj={"entity": ref("3")},
+                        valid_time=_instant(1605), confidence=unscored(), method="imported",
+                        asserted_by="pipeline", method_detail={"letter": "letter-1"}, support=letter_sup))
+    # A competing NAME form from correspSearch (a letter's Latin persName) → two
+    # has-name claims for Bacon, shown side by side, never merged (PP3).
+    claims.append(Claim(subject=ref("1"), predicate="has-name",
+                        obj={"literal": literal("string", "Franciscus Baconus")}, confidence=unscored(),
+                        method="imported", asserted_by="pipeline", method_detail={"name_kind": "variant"},
+                        support=letter_sup))
+    # Name the letter so it is a navigable document node.
+    claims.append(Claim(subject=ref("letter-1"), predicate="has-name",
+                        obj={"literal": literal("string", "Letter: Francis Bacon to Helen Alexander (1605)")},
+                        confidence=unscored(), method="imported", asserted_by="pipeline", support=letter_sup))
+    # folger-synth: a SOURCE-NATIVE COMPETING LIFE DATE — Bacon born 1560 vs the
+    # SDFB-synth 1561. This is exactly the competing claim §20 A1 found the Part 1
+    # corpus to lack; two born claims render side by side (PP3).
+    alt_raw = {"person": "synth:1", "birth": "1560", "note": "alternate birth year", "SYNTHETIC": True}
+    alt_sup = _support(ALTDATES_SYNTH_SLUG, "person", "synth:1", alt_raw)
+    claims.append(Claim(subject=ref("1"), predicate="born", obj={"literal": literal("year", 1560)},
+                        valid_time=_instant(1560), confidence=unscored(), method="imported",
+                        asserted_by="pipeline", support=alt_sup))
+    return entities, claims
+
+
 def write_fixture(out_dir: str | Path, scale: int = 1) -> dict[str, Any]:
     """Generate and write ``entities.ndjson`` + ``claims.ndjson`` to ``out_dir``.
 
-    Returns a small summary (counts, anomaly counters, edge-count table).
+    Includes the WP2b overlapping second sources so the fixture demonstrates
+    cross-source entities and competing claims. Returns a small summary.
     """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     entities, claims, counters = generate(scale)
+    extra_entities, extra_claims = overlapping_second_sources()
+    entities = entities + extra_entities
+    claims = claims + extra_claims
 
     (out / "entities.ndjson").write_text(
         "".join(to_ndjson_line(e) + "\n" for e in entities), encoding="utf-8"
@@ -221,6 +297,7 @@ def write_fixture(out_dir: str | Path, scale: int = 1) -> dict[str, Any]:
         "scale": scale,
         "entities": len(entities),
         "claims": len(claims),
+        "second_source_claims": len(extra_claims),
         "anomaly_counters": counters.as_dict(),
         "edge_counts": edge_counts_by_threshold(claims),
     }
