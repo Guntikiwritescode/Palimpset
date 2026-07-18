@@ -1,7 +1,9 @@
-"""correspSearch adapter — WP2b, built after the coverage probe passes (§11, A1).
+"""correspSearch adapter (WP2b) — CMIF/TEI letters → interchange claims.
 
-Deliberately a placeholder: the second source is promoted to immediately after WP2
-(§20 A1), but its adapter is written in WP2b, reusing WP2's machinery wholesale
-(the adapter-interface proof). Left unimplemented here on purpose — building it now
-would be out of scope for the SDFB work package.
+Built after the coverage probe passed (docs/probe-correspsearch.md). Reuses the
+WP2 adapter interface wholesale (§20 A1). See adapter.py and cmif.py.
 """
+from .adapter import CorrespSearchAdapter
+from .cmif import parse_cmif
+
+__all__ = ["CorrespSearchAdapter", "parse_cmif"]
