@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "palimpsest-pipeline"
+version = "0.1.0"
+description = "PALIMPSEST ingestion pipeline: harvest, adapt (source -> interchange claims), quality-account, submit."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "UNLICENSED" }
+dependencies = [
+  "jsonschema>=4.20",
+  "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+palimpsest-pipeline = "palimpsest_pipeline.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["palimpsest_pipeline"]
+
+[tool.pytest.ini_options]
+markers = [
+  "slow: full-dump tests; require a locally-supplied SDFB dump (skipped without one)",
+]
+testpaths = ["tests"]
