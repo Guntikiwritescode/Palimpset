@@ -5,6 +5,12 @@ architect-decided, vetoable — HANDOFF §1) and receives every deviation record
 thereafter (HANDOFF §3). One WP = one PR train; deviations are proposed, not
 silently implemented.
 
+> **RATIFICATION — owner, 2026-07-18.** The owner ratified the Part 1 build:
+> ADR-004/005/006 (vetoable → not vetoed), **DEV-001** (contracts authored
+> fresh), and **DEV-003** (Q-1…Q-7 adopted recommendations) are **ratified**.
+> DEV-002/DEV-004 are informational and acknowledged. The frozen contracts of
+> record are the fresh-authored files (DEV-001); change only via the §2 process.
+
 ---
 
 ## ADR-001 — PostgreSQL is the system of record; the graph is a projection
@@ -23,16 +29,16 @@ OpenAPI → SDK → explorer.
 **Status:** ratified by conduct. EMLO prohibits bulk use without permission.
 
 ## ADR-004 — The engine owns all writes, including bulk import
-**Status:** architect-decided, vetoable. The Phase-0 direct-DB loader is demoted
-to `tools/`, marked non-production, never invoked by engine/pipeline/CI.
+**Status:** ratified by the owner 2026-07-18 (not vetoed). The Phase-0 direct-DB
+loader is demoted to `tools/`, marked non-production, never invoked by engine/pipeline/CI.
 
 ## ADR-005 — Single-scholar identity model for Part 1
-**Status:** architect-decided, vetoable. One human token; distinct pipeline/model
-tokens; real attribution in the event log.
+**Status:** ratified by the owner 2026-07-18 (not vetoed). One human token; distinct
+pipeline/model tokens; real attribution in the event log.
 
 ## ADR-006 — Transactional-outbox projections, in-engine first
-**Status:** architect-decided, vetoable. The Go recompute operator consumes the
-same outbox in Phase 3; nothing is thrown away.
+**Status:** ratified by the owner 2026-07-18 (not vetoed). The Go recompute operator
+consumes the same outbox in Phase 3; nothing is thrown away.
 
 ---
 
@@ -62,8 +68,8 @@ re-validating Phase-0 evidence. All downstream code programs against these files
 so a later swap is a controlled migration, not a rewrite. Frozen-ness is enforced
 mechanically from here on (`scripts/contract_gate.py`, checksums).
 
-**Status:** proposed — **awaiting architect approval.** Build proceeds under the
-owner's session directive; this record makes the deviation visible in the diff.
+**Status:** **RATIFIED by the owner 2026-07-18.** The fresh-authored contracts are
+the contract of record for this build; further change only via the §2 process.
 
 ## DEV-002 — Runtime evidence uses a local PostgreSQL server; Docker/kind unavailable
 **Context.** The session environment has no Docker daemon and no
@@ -93,7 +99,7 @@ adopting the handoff's own recommended answer (all author-endorsed and
 easiest-to-reverse). Each is flagged in the relevant PR and carried to the
 checkpoint for ratification.
 
-**Status:** proposed — awaiting architect ratification of the adopted defaults.
+**Status:** **RATIFIED by the owner 2026-07-18** — the adopted Q-1…Q-7 defaults stand.
 
 ## DEV-004 — WP7 entity resolution: partials in this build
 **Context.** WP7's full scope (gold-set tooling, blocking + Fellegi–Sunter scorer,
