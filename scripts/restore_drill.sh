@@ -28,6 +28,13 @@
 #   NAMESPACE (palimpsest)  DB (palimpsest)  RESTORE_DB (unset = in-place)
 #   DUMP_PATH (/tmp/palimpsest-drill.dump, inside the pod)
 #   FORCE (0)  -> required to run the destructive in-place drill non-interactively
+#   LOCAL (0)  -> 1 = drill a LOCAL PostgreSQL server directly (no kind/kubectl).
+#                 Exercises the SAME dump -> drop -> restore -> rowcount-compare
+#                 path as the superuser via peer auth. The k8s wrapper (kubectl
+#                 exec, engine scale-to-0 quiesce) is NOT exercised in this mode.
+#                 Added in WP-R1 so the drill is runnable where no cluster exists
+#                 (this build's environment — DEV-002).
+#   PG_SUPERUSER (postgres) -> local superuser used for LOCAL mode
 # =============================================================================
 set -euo pipefail
 
@@ -36,6 +43,8 @@ DB="${DB:-palimpsest}"
 RESTORE_DB="${RESTORE_DB:-}"            # empty => in-place (destructive)
 DUMP_PATH="${DUMP_PATH:-/tmp/palimpsest-drill.dump}"
 FORCE="${FORCE:-0}"
+LOCAL="${LOCAL:-0}"
+PG_SUPERUSER="${PG_SUPERUSER:-postgres}"
 ENGINE_DEPLOY="palimpsest-engine"
 
 log()  { printf '\033[36m[drill]\033[0m %s\n' "$*"; }
@@ -43,13 +52,16 @@ ok()   { printf '\033[32m[ ok ]\033[0m %s\n' "$*"; }
 die()  { printf '\033[31m[fail]\033[0m %s\n' "$*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || die "required tool not found: $1"; }
 
-need kubectl
+# k8s preamble — only when NOT running the LOCAL (cluster-less) drill.
+if [[ "$LOCAL" != "1" ]]; then
+  need kubectl
 
-# Resolve the Postgres pod.
-POD="$(kubectl -n "$NAMESPACE" get pod \
-        -l app.kubernetes.io/name=postgres -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
-[[ -n "$POD" ]] || die "could not find the postgres pod in namespace '$NAMESPACE'"
-log "target: namespace=$NAMESPACE pod=$POD db=$DB"
+  # Resolve the Postgres pod.
+  POD="$(kubectl -n "$NAMESPACE" get pod \
+          -l app.kubernetes.io/name=postgres -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+  [[ -n "$POD" ]] || die "could not find the postgres pod in namespace '$NAMESPACE'"
+  log "target: namespace=$NAMESPACE pod=$POD db=$DB"
+fi
 
 # Run a bash snippet inside the pod. Client-side args are passed positionally
 # ($1, $2, ...); the pod's own $POSTGRES_PASSWORD stays in the pod.
@@ -82,6 +94,78 @@ if [[ -z "$RESTORE_DB" ]]; then
   fi
 else
   log "MODE: SAFE — restore into scratch database '$RESTORE_DB'; primary '$DB' untouched"
+fi
+
+# ---- LOCAL mode: drill a local PostgreSQL server (no cluster) ----------------
+# Same dump -> drop -> restore -> rowcount-compare path, run as the local
+# superuser over the unix socket (peer auth). No kubectl/pod, no engine quiesce.
+if [[ "$LOCAL" == "1" ]]; then
+  need psql; need pg_dump; need pg_restore; need sudo; need awk
+  pgs() { sudo -u "$PG_SUPERUSER" "$@"; }   # a pg client as the local superuser (peer auth)
+
+  lcounts() {  # lcounts <db> -> sorted "table|count" lines
+    pgs psql -Atd "$1" -c \
+      "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY 1" \
+    | while read -r t; do
+        [ -z "$t" ] && continue
+        printf '%s|%s\n' "$t" "$(pgs psql -Atd "$1" -c "SELECT count(*) FROM public.\"$t\"")"
+      done
+  }
+  secs() { awk -v a="$1" -v b="$2" 'BEGIN{printf "%.2f", b-a}'; }
+
+  log "LOCAL drill on $(pgs psql -Atc 'SELECT version()' | cut -d',' -f1); db='$DB'"
+  BEFORE="$(lcounts "$DB")"
+  [[ -n "$BEFORE" ]] || die "no tables in '$DB' — nothing to drill (schema migrated + loaded?)"
+  before_total="$(awk -F'|' '{s+=$2} END{print s+0}' <<<"$BEFORE")"
+  echo "$BEFORE" | sed 's/^/    /'
+  log "BEFORE: $before_total rows across $(wc -l <<<"$BEFORE") tables"
+
+  t0=$(date +%s.%N)
+  pgs pg_dump -Fc -d "$DB" -f "$DUMP_PATH"
+  t1=$(date +%s.%N)
+  log "pg_dump -Fc -> $DUMP_PATH ($(pgs du -h "$DUMP_PATH" | cut -f1)) in $(secs "$t0" "$t1")s"
+
+  if [[ -z "$RESTORE_DB" ]]; then
+    TARGET_DB="$DB"
+    log "DROP + CREATE + pg_restore IN-PLACE '$DB' (the disaster, then the recovery)"
+    t2=$(date +%s.%N)
+    pgs psql -d postgres -v ON_ERROR_STOP=1 -c \
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='$DB' AND pid<>pg_backend_pid();" >/dev/null || true
+    pgs psql -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"$DB\";"
+    pgs psql -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$DB\" OWNER migrate;"
+    t3=$(date +%s.%N)
+  else
+    TARGET_DB="$RESTORE_DB"
+    log "CREATE scratch '$RESTORE_DB'; primary '$DB' untouched"
+    t2=$(date +%s.%N)
+    pgs psql -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"$RESTORE_DB\";"
+    pgs psql -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$RESTORE_DB\" OWNER migrate;"
+    t3=$(date +%s.%N)
+  fi
+  pgs pg_restore -d "$TARGET_DB" --exit-on-error "$DUMP_PATH"
+  t4=$(date +%s.%N)
+  log "drop/create in $(secs "$t2" "$t3")s; pg_restore in $(secs "$t3" "$t4")s (into '$TARGET_DB')"
+
+  AFTER="$(lcounts "$TARGET_DB")"
+  after_total="$(awk -F'|' '{s+=$2} END{print s+0}' <<<"$AFTER")"
+  echo "$AFTER" | sed 's/^/    /'
+  log "AFTER: $after_total rows"
+
+  if [[ "$BEFORE" == "$AFTER" ]]; then
+    ok "VERIFIED — every table's rowcount matches after restore ($after_total rows)"
+  else
+    echo "----- BEFORE vs AFTER diff -----" >&2
+    diff <(echo "$BEFORE") <(echo "$AFTER") >&2 || true
+    die "rowcount MISMATCH after restore — the drill FAILED"
+  fi
+  if [[ -n "$RESTORE_DB" ]]; then
+    log "dropping scratch database '$RESTORE_DB'"
+    pgs psql -d postgres -c "DROP DATABASE IF EXISTS \"$RESTORE_DB\";" >/dev/null
+  fi
+  log "-------------------------------------------------------------"
+  ok  "LOCAL RESTORE DRILL PASSED — dump · drop · restore · rowcounts match"
+  log "total wall time: $(secs "$t0" "$t4")s"
+  exit 0
 fi
 
 # ---- 1. quiesce writes ------------------------------------------------------

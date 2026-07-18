@@ -171,7 +171,8 @@ kubectl -n palimpsest logs job/backup-now -f
 
 `scripts/restore_drill.sh` proves the restore path works: it quiesces writes,
 records rowcounts, dumps, **drops the database**, restores, and asserts every
-table's rowcount matches.
+table's rowcount matches. Dated runs with measured timings are recorded in
+`docs/OPERATIONS.md` (first exercised 2026-07-18, WP-R1).
 
 ```bash
 # Destructive in-place drill (default; disposable kind cluster).
@@ -180,6 +181,12 @@ FORCE=1 bash scripts/restore_drill.sh
 # Non-destructive variant: restore into a scratch DB and compare, leaving the
 # primary untouched.
 RESTORE_DB=palimpsest_verify bash scripts/restore_drill.sh
+
+# LOCAL mode (no cluster): drill a local PostgreSQL server directly — same
+# dump/drop/restore/verify path, run as the superuser over the socket. Added in
+# WP-R1 so the drill is runnable where no kind/kubectl exists (DEV-002). The k8s
+# wrapper (kubectl exec, engine quiesce) is NOT exercised in this mode.
+FORCE=1 LOCAL=1 bash scripts/restore_drill.sh
 ```
 
 Step by step, what it does (and what to do by hand if you ever need to):
