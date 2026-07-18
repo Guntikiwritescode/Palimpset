@@ -1,0 +1,57 @@
+# Postgres init hook (runs once, on an empty data directory, as the superuser).
+# Creates the three least-privilege roles (ARCHITECTURE §7) and wires default
+# privileges so the engine (engine_rw) gets DML, analytics (analytics_ro) gets
+# SELECT, and Flyway (migrate) owns DDL. Mirrors scripts/dev_db.sh so local and
+# in-cluster grants are identical.
+#
+# Role passwords come from the palimpsest-secrets Secret, injected as env into
+# the postgres container — never written into this ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: palimpsest
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    app.kubernetes.io/component: database
+data:
+  10-roles.sh: |
+    #!/usr/bin/env bash
+    # docker-entrypoint-initdb.d hook. Runs inside the official postgres image
+    # after the cluster is initialised and POSTGRES_DB ('palimpsest') exists.
+    set -euo pipefail
+
+    : "${ENGINE_DB_PASSWORD:?missing engine_rw password}"
+    : "${MIGRATE_DB_PASSWORD:?missing migrate password}"
+    : "${ANALYTICS_DB_PASSWORD:?missing analytics_ro password}"
+
+    # Roles are created idempotently; passwords are passed as psql variables so
+    # they never appear in the script text or the process list.
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+      -v engine_pw="$ENGINE_DB_PASSWORD" \
+      -v migrate_pw="$MIGRATE_DB_PASSWORD" \
+      -v analytics_pw="$ANALYTICS_DB_PASSWORD" <<'SQL'
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='migrate')      THEN CREATE ROLE migrate      LOGIN; END IF;
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='engine_rw')    THEN CREATE ROLE engine_rw    LOGIN; END IF;
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='analytics_ro') THEN CREATE ROLE analytics_ro LOGIN; END IF;
+    END $$;
+
+    ALTER ROLE migrate      PASSWORD :'migrate_pw';
+    ALTER ROLE engine_rw    PASSWORD :'engine_pw';
+    ALTER ROLE analytics_ro PASSWORD :'analytics_pw';
+
+    -- Flyway (migrate) owns and creates the schema objects.
+    GRANT ALL   ON SCHEMA public TO migrate;
+    GRANT USAGE ON SCHEMA public TO engine_rw, analytics_ro;
+
+    -- Objects created by migrate: engine_rw gets DML, analytics_ro gets SELECT.
+    ALTER DEFAULT PRIVILEGES FOR ROLE migrate IN SCHEMA public
+      GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO engine_rw;
+    ALTER DEFAULT PRIVILEGES FOR ROLE migrate IN SCHEMA public
+      GRANT USAGE, SELECT ON SEQUENCES TO engine_rw;
+    ALTER DEFAULT PRIVILEGES FOR ROLE migrate IN SCHEMA public
+      GRANT SELECT ON TABLES TO analytics_ro;
+    SQL
+
+    echo "[init] roles migrate/engine_rw/analytics_ro ready on ${POSTGRES_DB}"

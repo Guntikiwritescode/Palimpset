@@ -1,0 +1,103 @@
+# Ontology engine (ARCHITECTURE §3.3, §5.1) — the sole write authority and the
+# only API anyone calls. Stateless (DB-backed). Flyway runs at startup, so a
+# pending/failed migration keeps the pod out of readiness (§18) rather than
+# serving against an unknown schema.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: palimpsest-engine
+  namespace: palimpsest
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    app.kubernetes.io/component: engine
+    app.kubernetes.io/name: engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: engine
+      app.kubernetes.io/component: engine
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: palimpsest
+        app.kubernetes.io/component: engine
+        app.kubernetes.io/name: engine
+      annotations:
+        # Direct-scrape hint for the API-latency panels (Micrometer histogram).
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: /actuator/prometheus
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: engine
+          # Placeholder image built locally and loaded into kind; the local
+          # overlay pins imagePullPolicy so kind uses the loaded image.
+          image: palimpsest/engine:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: engine-config
+          env:
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: palimpsest-secrets
+                  key: engine-db-password
+            - name: SPRING_FLYWAY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: palimpsest-secrets
+                  key: migrate-db-password
+            - name: PALIMPSEST_SCHOLAR_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: palimpsest-secrets
+                  key: scholar-token
+            - name: PALIMPSEST_PIPELINE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: palimpsest-secrets
+                  key: pipeline-token
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          # readiness = DB reachable + migrations current (BUILD-CONTRACT §4).
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+          # Give Flyway time on a cold start before liveness starts counting.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30

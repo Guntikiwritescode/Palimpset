@@ -1,0 +1,59 @@
+spring:
+  application:
+    name: palimpsest-engine
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://127.0.0.1:5432/palimpsest}
+    username: ${SPRING_DATASOURCE_USERNAME:engine_rw}
+    password: ${SPRING_DATASOURCE_PASSWORD:engine_pw}
+    hikari:
+      maximum-pool-size: 10
+      pool-name: engine-pool
+  flyway:
+    enabled: true
+    # Migrations run as the `migrate` role (least privilege; ADR + §7).
+    url: ${PALIMPSEST_MIGRATE_URL:${SPRING_DATASOURCE_URL:jdbc:postgresql://127.0.0.1:5432/palimpsest}}
+    user: ${PALIMPSEST_MIGRATE_USER:migrate}
+    password: ${PALIMPSEST_MIGRATE_PASSWORD:migrate_pw}
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+server:
+  port: ${PALIMPSEST_PORT:8080}
+  error:
+    include-message: never
+
+# The scholar/pipeline/model bearer tokens map to agent rows (ADR-005).
+palimpsest:
+  auth:
+    scholar-token: ${PALIMPSEST_SCHOLAR_TOKEN:dev-scholar-token}
+    pipeline-token: ${PALIMPSEST_PIPELINE_TOKEN:dev-pipeline-token}
+    model-token: ${PALIMPSEST_MODEL_TOKEN:dev-model-token}
+    # While the license gate holds, reads require a token too (defense in depth).
+    require-auth-for-reads: ${PALIMPSEST_REQUIRE_AUTH_READS:false}
+  cors:
+    explorer-origin: ${PALIMPSEST_EXPLORER_ORIGIN:http://localhost:5173}
+  network:
+    edge-cap: 500
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: palimpsest-engine
+
+logging:
+  level:
+    org.flywaydb: info

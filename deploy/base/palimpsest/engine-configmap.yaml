@@ -1,0 +1,36 @@
+# Non-secret engine configuration (ARCHITECTURE §5.1, §5.6, §7). Secrets
+# (DB passwords, bearer tokens) come from the palimpsest-secrets Secret, never
+# from here. CORS is pinned to the explorer's port-forward origin (§7): the
+# browser loads the explorer at http://localhost:8081 and calls the engine at
+# http://localhost:8080, so that origin must be allow-listed.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: engine-config
+  namespace: palimpsest
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    app.kubernetes.io/component: engine
+data:
+  # --- datasource (engine runs as engine_rw; Flyway runs as migrate) ---
+  SPRING_DATASOURCE_URL: jdbc:postgresql://palimpsest-postgres.palimpsest.svc.cluster.local:5432/palimpsest
+  SPRING_DATASOURCE_USERNAME: engine_rw
+  SPRING_FLYWAY_USER: migrate
+  SPRING_FLYWAY_ENABLED: "true"
+  # --- CORS: locked to the explorer origin (§7) ---
+  PALIMPSEST_CORS_ALLOWED_ORIGINS: http://localhost:8081
+  # --- OpenTelemetry: engine exports OTLP to the collector (§3.8, §5.6) ---
+  OTEL_SERVICE_NAME: palimpsest-engine
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability.svc.cluster.local:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_METRICS_EXPORTER: otlp
+  OTEL_TRACES_EXPORTER: otlp
+  OTEL_LOGS_EXPORTER: none
+  # --- Micrometer/Actuator: also expose a Prometheus scrape endpoint at
+  #     /actuator/prometheus so Prometheus can scrape the engine directly for
+  #     the API-latency SLO panels (belt-and-suspenders with the OTLP path). ---
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus
+  MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED: "true"
+  MANAGEMENT_METRICS_DISTRIBUTION_PERCENTILES_HISTOGRAM_HTTP_SERVER_REQUESTS: "true"
+  # --- app ---
+  SERVER_PORT: "8080"

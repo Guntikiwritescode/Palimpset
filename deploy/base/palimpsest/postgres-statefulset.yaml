@@ -1,0 +1,108 @@
+# Claim store — PostgreSQL 16 (ARCHITECTURE §3.2, §5.6). Single replica,
+# StatefulSet with a 10Gi PVC. Flyway (run by the engine at startup) owns the
+# schema; this pod only provides the server and the three roles.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: palimpsest-postgres
+  namespace: palimpsest
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    app.kubernetes.io/component: database
+    app.kubernetes.io/name: postgres
+spec:
+  serviceName: palimpsest-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: palimpsest
+        app.kubernetes.io/component: database
+        app.kubernetes.io/name: postgres
+    spec:
+      securityContext:
+        # postgres UID/GID in the official image; fsGroup lets the PVC be writable.
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+        - name: postgres
+          # Pinned: Postgres 16 (ships pg_dump/pg_restore used by the backup
+          # CronJob and the restore drill).
+          image: postgres:16.4
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_DB
+              value: palimpsest
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: palimpsest-secrets
+                  key: postgres-superuser-password
+            # Consumed only by the init hook (10-roles.sh).
+            - name: ENGINE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: palimpsest-secrets
+                  key: engine-db-password
+            - name: MIGRATE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: palimpsest-secrets
+                  key: migrate-db-password
+            - name: ANALYTICS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: palimpsest-secrets
+                  key: analytics-db-password
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          readinessProbe:
+            exec:
+              command: ["bash", "-c", "pg_isready -U postgres -d palimpsest -h 127.0.0.1"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["bash", "-c", "pg_isready -U postgres -h 127.0.0.1"]
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: init
+          configMap:
+            name: postgres-init
+            defaultMode: 0555
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/part-of: palimpsest
+          app.kubernetes.io/component: database
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi

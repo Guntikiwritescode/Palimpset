@@ -1,0 +1,21 @@
+# Headless ClusterIP service for the Postgres StatefulSet. clusterIP: None gives
+# stable per-pod DNS (palimpsest-postgres-0.palimpsest-postgres...) and the
+# service name resolves for clients. NOT a LoadBalancer — no public exposure.
+apiVersion: v1
+kind: Service
+metadata:
+  name: palimpsest-postgres
+  namespace: palimpsest
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    app.kubernetes.io/component: database
+    app.kubernetes.io/name: postgres
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres

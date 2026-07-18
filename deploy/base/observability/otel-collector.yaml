@@ -1,0 +1,128 @@
+# OpenTelemetry Collector (ARCHITECTURE §3.8, §5.6). Receives OTLP from the
+# engine (and, later, pipeline jobs) and re-exposes metrics for Prometheus to
+# scrape at :8889. Deployed as a Deployment (not a DaemonSet): single-node kind,
+# and the engine pushes over the network, so one collector suffices.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: observability
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    app.kubernetes.io/component: otel-collector
+data:
+  collector.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      batch:
+        timeout: 5s
+      memory_limiter:
+        check_interval: 5s
+        limit_percentage: 80
+        spike_limit_percentage: 25
+
+    exporters:
+      # Prometheus scrapes this endpoint (see prometheus-config: job otel-collector).
+      prometheus:
+        endpoint: 0.0.0.0:8889
+        resource_to_telemetry_conversion:
+          enabled: true
+      # Traces have no backend in Part 1; log them so the pipeline is observable.
+      debug:
+        verbosity: normal
+
+    service:
+      telemetry:
+        metrics:
+          address: 0.0.0.0:8888
+      pipelines:
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [prometheus]
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [debug]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: observability
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    app.kubernetes.io/component: otel-collector
+    app.kubernetes.io/name: otel-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-collector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: palimpsest
+        app.kubernetes.io/component: otel-collector
+        app.kubernetes.io/name: otel-collector
+    spec:
+      containers:
+        - name: otel-collector
+          # Pinned: contrib distribution (carries the prometheus exporter).
+          image: otel/opentelemetry-collector-contrib:0.104.0
+          imagePullPolicy: IfNotPresent
+          args: ["--config=/etc/otel/collector.yaml"]
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+            - name: prom-export
+              containerPort: 8889
+            - name: self-metrics
+              containerPort: 8888
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otel
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: observability
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    app.kubernetes.io/component: otel-collector
+    app.kubernetes.io/name: otel-collector
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+    - name: prom-export
+      port: 8889
+      targetPort: prom-export

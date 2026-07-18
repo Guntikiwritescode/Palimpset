@@ -1,0 +1,18 @@
+# Two namespaces (ARCHITECTURE §5.6): the application plane and the
+# observability plane. Kept separate so RBAC, quotas, and network policy can
+# differ per plane later without moving workloads.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: palimpsest
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    palimpsest.dev/plane: application
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    app.kubernetes.io/part-of: palimpsest
+    palimpsest.dev/plane: observability

@@ -1,0 +1,50 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: palimpsest-base
+
+# The full Part 1 stack (ARCHITECTURE §5.6). Two planes, two namespaces.
+# NOTE: secret.example.yaml is deliberately NOT a resource here — it is a
+# template with placeholder values. Real Secrets are applied out-of-band
+# (scripts create dev Secrets for kind; see deploy/README.md).
+resources:
+  # --- cluster ---
+  - namespaces.yaml
+  # --- application plane (namespace: palimpsest) ---
+  - palimpsest/postgres-init-configmap.yaml
+  - palimpsest/postgres-statefulset.yaml
+  - palimpsest/postgres-service.yaml
+  - palimpsest/postgres-backup.yaml
+  - palimpsest/engine-configmap.yaml
+  - palimpsest/engine-deployment.yaml
+  - palimpsest/engine-service.yaml
+  - palimpsest/explorer-configmap.yaml
+  - palimpsest/explorer-deployment.yaml
+  - palimpsest/explorer-service.yaml
+  # --- observability plane (namespace: observability) ---
+  - observability/otel-collector.yaml
+  - observability/postgres-exporter.yaml
+  - observability/prometheus.yaml
+  - observability/grafana.yaml
+
+# Grafana dashboards are provisioned from JSON files into a ConfigMap that the
+# Grafana Deployment mounts at /var/lib/grafana/dashboards.
+configMapGenerator:
+  - name: grafana-dashboards
+    namespace: observability
+    options:
+      labels:
+        app.kubernetes.io/part-of: palimpsest
+        app.kubernetes.io/component: grafana
+    files:
+      - dashboards/palimpsest-api.json
+      - dashboards/palimpsest-ingest.json
+
+generatorOptions:
+  # Stable ConfigMap name so the Grafana volume reference resolves predictably.
+  disableNameSuffixHash: true
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: palimpsest
+    includeSelectors: false
